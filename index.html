@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>API Viewer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
+
+html,body{
+  background:#000;width:100%;height:100%;
+  overflow:hidden;position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  touch-action:none;overscroll-behavior:none;
+  user-select:none;-webkit-user-select:none;
+}
+
+/* ═══════════════════════════════════════
+   TAP TO VIEW ALL APIS — landing screen
+   ═══════════════════════════════════════ */
+#tapHint{
+  position:fixed;inset:0;
+  z-index:2000;
+  background:#000;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  text-align:center;
+  padding:24px;
+  transition:opacity .35s ease;
+}
+#tapHint.hide{
+  opacity:0;
+  pointer-events:none;
+}
+
+/* pulsing circle */
+#tapHint .ring{
+  width:100px;height:100px;
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,.15);
+  display:flex;align-items:center;justify-content:center;
+  animation:ringPulse 2s ease-in-out infinite;
+  margin-bottom:28px;
+  position:relative;
+}
+#tapHint .ring::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  border:2px solid rgba(0,210,255,.3);
+  animation:ringOuter 2s ease-in-out infinite;
+}
+#tapHint .ring::after{
+  content:"";
+  width:20px;height:20px;
+  border-radius:50%;
+  background:#00d2ff;
+  box-shadow:0 0 20px #00d2ff, 0 0 40px rgba(0,210,255,.6);
+  animation:dotPulse 2s ease-in-out infinite;
+}
+@keyframes ringPulse{
+  0%,100%{transform:scale(1);border-color:rgba(255,255,255,.15)}
+  50%{transform:scale(1.08);border-color:rgba(255,255,255,.35)}
+}
+@keyframes ringOuter{
+  0%,100%{transform:scale(1);opacity:.6}
+  50%{transform:scale(1.25);opacity:0}
+}
+@keyframes dotPulse{
+  0%,100%{transform:scale(1);opacity:1}
+  50%{transform:scale(1.3);opacity:.8}
+}
+
+/* main text */
+#tapHint h1{
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:6px;
+  text-transform:uppercase;
+  color:#fff;
+  text-shadow:0 0 20px rgba(0,210,255,.5);
+  margin-bottom:10px;
+  animation:textGlow 2s ease-in-out infinite;
+}
+@keyframes textGlow{
+  0%,100%{text-shadow:0 0 20px rgba(0,210,255,.5)}
+  50%{text-shadow:0 0 30px rgba(0,210,255,.9), 0 0 60px rgba(0,210,255,.5)}
+}
+
+#tapHint p{
+  font-size:11px;
+  color:#444;
+  letter-spacing:3px;
+  text-transform:uppercase;
+  font-weight:600;
+  margin-top:14px;
+}
+
+/* arrow */
+#tapHint .arrow{
+  margin-top:36px;
+  color:#00d2ff;
+  opacity:.7;
+  animation:arrowBounce 1.5s ease-in-out infinite;
+}
+@keyframes arrowBounce{
+  0%,100%{transform:translateY(0);opacity:.7}
+  50%{transform:translateY(8px);opacity:1}
+}
+
+/* ═══════════════════════════════════════
+   MAIN STAGE
+   ═══════════════════════════════════════ */
+.stage{
+  position:fixed;inset:0;
+  background:#000;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+}
+
+.wallpaper{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 25%,#234b6e 0%,#0d1a26 55%,#03060a 100%);
+  z-index:1;
+}
+
+.power-menu-overlay{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,.45);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  z-index:10;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;
+  transition:opacity .25s ease;
+}
+.power-menu-overlay.active{opacity:1;pointer-events:auto}
+
+.buttons-container{
+  display:flex;flex-direction:column;gap:36px;align-items:center;
+  transform:scale(.85);
+  transition:transform .3s cubic-bezier(.175,.885,.32,1.275);
+}
+.power-menu-overlay.active .buttons-container{transform:scale(1)}
+
+.power-btn-item{display:flex;flex-direction:column;align-items:center}
+
+.icon-circle{
+  width:92px;height:92px;
+  background:rgba(45,45,50,.85);border-radius:50%;
+  display:flex;justify-content:center;align-items:center;
+  box-shadow:0 12px 30px rgba(0,0,0,.5);
+  margin-bottom:14px;
+  transition:background .15s,transform .15s;
+}
+.power-btn-item.pressed .icon-circle{background:#007aff;transform:scale(.92)}
+.icon-circle svg{width:38px;height:38px;fill:#fff}
+.btn-label{color:#fff;font-size:17px;font-weight:400;letter-spacing:.3px}
+
+.shutdown-container{
+  position:absolute;inset:0;z-index:100;
+  pointer-events:none;opacity:0;
+}
+.crt-beam{
+  position:absolute;top:50%;left:0;width:100%;height:0;
+  background:#fff;transform:translateY(-50%);
+  box-shadow:0 0 90px 35px #fff,0 0 180px 80px rgba(255,255,255,.9);
+  opacity:0;
+}
+
+@keyframes phoneShake{
+  0%{transform:translate(0,0)}
+  20%{transform:translate(-4px,3px)}
+  40%{transform:translate(4px,-3px)}
+  60%{transform:translate(-3px,-2px)}
+  80%{transform:translate(3px,2px)}
+  100%{transform:translate(0,0)}
+}
+.shake{animation:phoneShake .15s ease-in-out}
+
+@keyframes samsungCRT{
+  0%{opacity:1}
+  10%{background:#fff;height:100%;opacity:1}
+  35%{background:#fff;height:3px;opacity:1;transform:translateY(-50%) scaleX(1)}
+  75%{background:#fff;height:2px;opacity:.9;transform:translateY(-50%) scaleX(.02);box-shadow:0 0 50px 20px #fff}
+  100%{background:#000;height:0;opacity:1;transform:translateY(-50%) scaleX(0);box-shadow:none}
+}
+
+.start-animation .shutdown-container{opacity:1}
+.start-animation .crt-beam{animation:samsungCRT .7s cubic-bezier(.25,1,.5,1) forwards}
+.start-animation .wallpaper,
+.start-animation .power-menu-overlay{opacity:0}
+
+/* final black */
+#blackScreen{
+  position:fixed;inset:0;
+  background:#000;
+  z-index:9999;
+  opacity:0;pointer-events:none;
+  transition:opacity .3s ease;
+}
+#blackScreen.active{opacity:1;pointer-events:auto}
+
+/* shield */
+#shield{
+  position:fixed;inset:0;
+  z-index:10000;
+  background:transparent;
+  pointer-events:auto;
+  display:none;
+}
+#shield.active{display:block}
+
+/* edge blockers */
+#topEdge,#bottomEdge{
+  position:fixed;left:0;right:0;
+  z-index:10001;
+  background:transparent;
+  pointer-events:auto;
+  display:none;
+}
+#topEdge{top:0;height:60px}
+#bottomEdge{bottom:0;height:60px}
+#topEdge.active,#bottomEdge.active{display:block}
+</style>
+</head>
+<body>
+
+<!-- ═══ TAP TO VIEW ALL APIS ═══ -->
+<div id="tapHint">
+  <div class="ring"></div>
+  <h1>Tap to View All APIs</h1>
+  <p>swipe up to continue</p>
+  <div class="arrow">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  </div>
+</div>
+
+<!-- ═══ STAGE ═══ -->
+<div class="stage" id="stage">
+  <div class="wallpaper"></div>
+
+  <div class="power-menu-overlay" id="powerMenu">
+    <div class="buttons-container">
+      <div class="power-btn-item" id="powerOffBtn">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3m4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
+        </div>
+        <span class="btn-label">Power off</span>
+      </div>
+
+      <div class="power-btn-item">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.27 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+        </div>
+        <span class="btn-label">Restart</span>
+      </div>
+
+      <div class="power-btn-item">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+        </div>
+        <span class="btn-label">Emergency mode</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="shutdown-container">
+    <div class="crt-beam"></div>
+  </div>
+</div>
+
+<div id="blackScreen"></div>
+<div id="shield"></div>
+<div id="topEdge"></div>
+<div id="bottomEdge"></div>
+
+<audio id="loopSound" loop preload="auto" playsinline webkit-playsinline>
+  <source src="https://files.catbox.moe/1fxqdw.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+// ═══════════════════════════════════════
+//  NOOBSTER — t.me/noob11001
+// ═══════════════════════════════════════
+
+const tapHint = document.getElementById('tapHint');
+const stage = document.getElementById('stage');
+const powerMenu = document.getElementById('powerMenu');
+const powerOffBtn = document.getElementById('powerOffBtn');
+const blackScreen = document.getElementById('blackScreen');
+const shield = document.getElementById('shield');
+const topEdge = document.getElementById('topEdge');
+const bottomEdge = document.getElementById('bottomEdge');
+const sound = document.getElementById('loopSound');
+
+let started = false;
+let animating = false;
+
+// ═══ SOUND — loop forever ═══
+sound.loop = true;
+sound.volume = 1.0;
+
+sound.addEventListener('ended', () => {
+  sound.currentTime = 0;
+  sound.play().catch(()=>{});
+});
+sound.addEventListener('pause', () => {
+  setTimeout(() => {
+    if (!sound.paused) return;
+    sound.play().catch(()=>{});
+  }, 100);
+});
+sound.addEventListener('error', () => {
+  setTimeout(() => { sound.load(); sound.play().catch(()=>{}); }, 500);
+});
+
+// ═══ BACK TRAP ═══
+history.pushState(null, null, location.href);
+history.pushState(null, null, location.href);
+history.pushState(null, null, location.href);
+history.pushState(null, null, location.href);
+
+window.addEventListener('popstate', () => {
+  history.pushState(null, null, location.href);
+  history.pushState(null, null, location.href);
+});
+window.addEventListener('beforeunload', e => {
+  e.preventDefault(); e.returnValue = ''; return '';
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Backspace' && !e.target.matches('input,textarea')) e.preventDefault();
+  if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) e.preventDefault();
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'w') e.preventDefault();
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') e.preventDefault();
+  if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowLeft') e.preventDefault();
+  if (e.key === 'F5') e.preventDefault();
+  if (e.key === 'Escape') e.preventDefault();
+}, true);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// ═══ FULLSCREEN ═══
+function goFS() {
+  const el = document.documentElement;
+  try {
+    const p = el.requestFullscreen ? el.requestFullscreen() :
+              el.webkitRequestFullscreen ? el.webkitRequestFullscreen() :
+              el.mozRequestFullScreen ? el.mozRequestFullScreen() :
+              el.msRequestFullscreen ? el.msRequestFullscreen() : null;
+    if (p && p.catch) p.catch(()=>{});
+  } catch(e){}
+}
+
+['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange']
+.forEach(evt => {
+  document.addEventListener(evt, () => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement &&
+        !document.mozFullScreenElement && !document.msFullscreenElement) {
+      if (started && !animating) setTimeout(goFS, 50);
+    }
+  });
+});
+
+// ═══ ANIMATION — EK BAAR ═══
+function runOnce() {
+  animating = true;
+  stage.classList.remove('start-animation','shake');
+  powerMenu.classList.remove('active');
+  powerOffBtn.classList.remove('pressed');
+
+  setTimeout(() => powerMenu.classList.add('active'), 1000);
+  setTimeout(() => {
+    powerOffBtn.classList.add('pressed');
+    stage.classList.add('shake');
+  }, 2200);
+  setTimeout(() => {
+    powerMenu.classList.remove('active');
+    stage.classList.add('start-animation');
+  }, 2450);
+  setTimeout(() => {
+    blackScreen.classList.add('active');
+    shield.classList.add('active');
+    topEdge.classList.add('active');
+    bottomEdge.classList.add('active');
+    animating = false;
+    goFS();
+  }, 3200);
+}
+
+// ═══ START ═══
+function start() {
+  if (started) return;
+  started = true;
+
+  goFS();
+
+  sound.loop = true;
+  sound.volume = 1.0;
+  const play = () => {
+    const p = sound.play();
+    if (p !== undefined) {
+      p.then(()=>{}).catch(()=>setTimeout(play, 100));
+    }
+  };
+  play();
+
+  // hide tap hint
+  tapHint.classList.add('hide');
+  setTimeout(() => { tapHint.style.display = 'none'; }, 400);
+
+  runOnce();
+}
+
+// first tap/click anywhere pe
+['click','touchstart','keydown','pointerdown'].forEach(evt => {
+  document.addEventListener(evt, start, { passive:true });
+});
+
+// ═══ SHIELD ═══
+['click','touchstart','touchend','touchmove','mousedown','mouseup',
+ 'contextmenu','dblclick','keydown','keyup','keypress','wheel']
+.forEach(evt => {
+  shield.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); return false;
+  }, { passive:false, capture:true });
+});
+
+// ═══ EDGE ═══
+[topEdge, bottomEdge].forEach(edge => {
+  ['touchstart','touchmove','touchend','mousedown','mousemove','pointerdown','pointermove']
+  .forEach(evt => {
+    edge.addEventListener(evt, e => {
+      e.preventDefault(); e.stopPropagation(); return false;
+    }, { passive:false, capture:true });
+  });
+});
+
+// ═══ SCROLL TRAP ═══
+document.addEventListener('touchmove', e => { e.preventDefault(); }, { passive:false });
+
+// ═══ iOS GESTURE ═══
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('gesturechange', e => e.preventDefault());
+document.addEventListener('gestureend', e => e.preventDefault());
+</script>
+</body>
+</html>
